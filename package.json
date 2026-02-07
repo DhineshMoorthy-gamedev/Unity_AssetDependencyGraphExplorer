@@ -1,0 +1,22 @@
+{
+  "name": "com.github.dhinesh.assetdependencygraph",
+  "version": "0.1.0",
+  "displayName": "Asset Dependency Graph Explorer",
+  "description": "A visual, interactive graph that represents all dependencies of a selected Unity asset. Provides cognitive clarity for asset management, build optimization, and refactor safety.",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/DHINESH/Unity_AssetDependencyGraphExplorer#readme",
+  "changelogUrl": "https://github.com/DHINESH/Unity_AssetDependencyGraphExplorer/blob/main/CHANGELOG.md",
+  "license": "MIT",
+  "keywords": [
+    "asset",
+    "dependency",
+    "graph",
+    "visualization",
+    "editor",
+    "tool"
+  ],
+  "author": {
+    "name": "Dhinesh"
+  },
+  "category": "Editor"
+}
