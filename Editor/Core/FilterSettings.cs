@@ -138,5 +138,47 @@ namespace AssetDependencyGraph.Editor.Core
             ShowScriptableObjects = false;
             ShowOther = false;
         }
+        
+        /// <summary>
+        /// Gets the filter status for a specific category.
+        /// </summary>
+        public bool GetFilter(AssetCategory category)
+        {
+            return category switch
+            {
+                AssetCategory.Prefab => ShowPrefabs,
+                AssetCategory.Scene => ShowScenes,
+                AssetCategory.Script => ShowScripts,
+                AssetCategory.Material => ShowMaterials,
+                AssetCategory.Texture => ShowTextures,
+                AssetCategory.Shader => ShowShaders,
+                AssetCategory.Animation => ShowAnimations,
+                AssetCategory.Audio => ShowAudio,
+                AssetCategory.Model => ShowModels,
+                AssetCategory.ScriptableObject => ShowScriptableObjects,
+                _ => ShowOther
+            };
+        }
+        
+        /// <summary>
+        /// Sets the filter status for a specific category.
+        /// </summary>
+        public void SetFilter(AssetCategory category, bool value)
+        {
+            switch (category)
+            {
+                case AssetCategory.Prefab: ShowPrefabs = value; break;
+                case AssetCategory.Scene: ShowScenes = value; break;
+                case AssetCategory.Script: ShowScripts = value; break;
+                case AssetCategory.Material: ShowMaterials = value; break;
+                case AssetCategory.Texture: ShowTextures = value; break;
+                case AssetCategory.Shader: ShowShaders = value; break;
+                case AssetCategory.Animation: ShowAnimations = value; break;
+                case AssetCategory.Audio: ShowAudio = value; break;
+                case AssetCategory.Model: ShowModels = value; break;
+                case AssetCategory.ScriptableObject: ShowScriptableObjects = value; break;
+                default: ShowOther = value; break;
+            }
+        }
     }
 }

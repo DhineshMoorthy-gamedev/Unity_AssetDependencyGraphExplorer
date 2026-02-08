@@ -124,19 +124,22 @@ namespace AssetDependencyGraph.Editor.UI
         /// Draws all edges for visible nodes.
         /// </summary>
         public void DrawAllEdges(DependencyNode rootNode, Vector2 offset, float zoom, 
-            DependencyNode highlightedNode = null)
+            FilterSettings filterSettings = null, DependencyNode highlightedNode = null)
         {
             if (rootNode == null)
                 return;
                 
             var visited = new System.Collections.Generic.HashSet<string>();
-            DrawEdgesRecursive(rootNode, offset, zoom, visited, highlightedNode);
+            DrawEdgesRecursive(rootNode, offset, zoom, visited, filterSettings, highlightedNode);
         }
         
         private void DrawEdgesRecursive(DependencyNode node, Vector2 offset, float zoom,
-            System.Collections.Generic.HashSet<string> visited, DependencyNode highlightedNode)
+            System.Collections.Generic.HashSet<string> visited, FilterSettings filterSettings, DependencyNode highlightedNode)
         {
             if (node == null || visited.Contains(node.AssetGuid))
+                return;
+                
+            if (filterSettings != null && !filterSettings.ShouldShowNode(node))
                 return;
                 
             visited.Add(node.AssetGuid);
@@ -146,13 +149,16 @@ namespace AssetDependencyGraph.Editor.UI
             {
                 foreach (var edge in node.Dependencies)
                 {
+                    if (filterSettings != null && !filterSettings.ShouldShowNode(edge.ToNode))
+                        continue;
+
                     bool isHighlighted = highlightedNode != null && 
                         (edge.FromNode == highlightedNode || edge.ToNode == highlightedNode);
                     
                     DrawEdge(edge, offset, zoom, isHighlighted);
                     
                     // Recurse to children
-                    DrawEdgesRecursive(edge.ToNode, offset, zoom, visited, highlightedNode);
+                    DrawEdgesRecursive(edge.ToNode, offset, zoom, visited, filterSettings, highlightedNode);
                 }
             }
         }

@@ -126,20 +126,20 @@ namespace AssetDependencyGraph.Editor.Core
         }
         
         /// <summary>
-        /// Gets only the visible nodes based on expansion state.
+        /// Gets only the visible nodes based on expansion state and filter settings.
         /// </summary>
-        public List<DependencyNode> GetVisibleNodes(DependencyNode rootNode)
+        public List<DependencyNode> GetVisibleNodes(DependencyNode rootNode, FilterSettings filterSettings = null)
         {
             var visible = new List<DependencyNode>();
             var visited = new HashSet<string>();
             
-            GetVisibleNodesRecursive(rootNode, visited, visible, true);
+            GetVisibleNodesRecursive(rootNode, visited, visible, true, filterSettings);
             
             return visible;
         }
         
         private void GetVisibleNodesRecursive(DependencyNode node, HashSet<string> visited, 
-            List<DependencyNode> visible, bool parentExpanded)
+            List<DependencyNode> visible, bool parentExpanded, FilterSettings filterSettings)
         {
             if (node == null || visited.Contains(node.AssetGuid))
                 return;
@@ -147,28 +147,31 @@ namespace AssetDependencyGraph.Editor.Core
             if (!parentExpanded)
                 return;
                 
+            if (filterSettings != null && !filterSettings.ShouldShowNode(node))
+                return;
+                
             visited.Add(node.AssetGuid);
             visible.Add(node);
             
             foreach (var edge in node.Dependencies)
             {
-                GetVisibleNodesRecursive(edge.ToNode, visited, visible, node.IsExpanded);
+                GetVisibleNodesRecursive(edge.ToNode, visited, visible, node.IsExpanded, filterSettings);
             }
         }
         
         /// <summary>
         /// Recalculates layout for only visible nodes.
         /// </summary>
-        public void CalculateVisibleLayout(DependencyNode rootNode)
+        public void CalculateVisibleLayout(DependencyNode rootNode, FilterSettings filterSettings = null)
         {
             if (rootNode == null)
                 return;
                 
-            var visibleNodes = GetVisibleNodes(rootNode);
+            var visibleNodes = GetVisibleNodes(rootNode, filterSettings);
             
             // Rebuild depth for visible nodes only
             var depthMap = new Dictionary<string, int>();
-            CalculateVisibleDepth(rootNode, depthMap, 0);
+            CalculateVisibleDepth(rootNode, depthMap, 0, filterSettings);
             
             // Group by calculated depth
             var nodesByDepth = visibleNodes
@@ -198,9 +201,12 @@ namespace AssetDependencyGraph.Editor.Core
             }
         }
         
-        private void CalculateVisibleDepth(DependencyNode node, Dictionary<string, int> depthMap, int currentDepth)
+        private void CalculateVisibleDepth(DependencyNode node, Dictionary<string, int> depthMap, int currentDepth, FilterSettings filterSettings)
         {
             if (node == null || depthMap.ContainsKey(node.AssetGuid))
+                return;
+                
+            if (filterSettings != null && !filterSettings.ShouldShowNode(node))
                 return;
                 
             depthMap[node.AssetGuid] = currentDepth;
@@ -210,7 +216,7 @@ namespace AssetDependencyGraph.Editor.Core
                 
             foreach (var edge in node.Dependencies)
             {
-                CalculateVisibleDepth(edge.ToNode, depthMap, currentDepth + 1);
+                CalculateVisibleDepth(edge.ToNode, depthMap, currentDepth + 1, filterSettings);
             }
         }
     }

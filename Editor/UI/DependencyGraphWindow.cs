@@ -35,15 +35,17 @@ namespace AssetDependencyGraph.Editor.UI
         private bool _showFilters = true;
         private bool _showInfo = true;
         private Vector2 _filterScrollPos;
+        private Vector2 _infoScrollPos;
+        private System.Collections.Generic.List<AssetCategory> _availableCategories = new System.Collections.Generic.List<AssetCategory>();
         
         // Drop zone
         private Rect _dropZoneRect;
         
-        [MenuItem("Window/Asset Dependency Graph Explorer")]
+        [MenuItem("Tools/GameDevTools/Asset Dependency Graph Explorer")]
         public static void ShowWindow()
         {
             var window = GetWindow<DependencyGraphWindow>();
-            window.titleContent = new GUIContent("Dependency Graph", EditorGUIUtility.IconContent("d_SceneViewFx").image);
+            window.titleContent = new GUIContent("Dependency Graph v1", EditorGUIUtility.IconContent("d_SceneViewFx").image);
             window.minSize = new Vector2(600, 400);
             window.Show();
         }
@@ -119,7 +121,7 @@ namespace AssetDependencyGraph.Editor.UI
             }
             
             // Zoom with scroll wheel
-            if (e.type == EventType.ScrollWheel)
+            if (e.type == EventType.ScrollWheel && !IsMouseOverUI(e.mousePosition))
             {
                 float zoomDelta = -e.delta.y * 0.05f;
                 float oldZoom = _zoom;
@@ -129,8 +131,13 @@ namespace AssetDependencyGraph.Editor.UI
                 if (oldZoom != _zoom)
                 {
                     Vector2 mousePos = e.mousePosition;
-                    Vector2 graphPos = (mousePos / oldZoom) - _panOffset;
-                    _panOffset = (mousePos / _zoom) - graphPos;
+                    Vector2 windowCenter = new Vector2(position.width / 2f, position.height / 2f);
+                    
+                    // The point on the graph in un-scaled space (relative to _panOffset)
+                    Vector2 mouseOffset = (mousePos - windowCenter) / oldZoom;
+                    Vector2 nextMouseOffset = (mousePos - windowCenter) / _zoom;
+                    
+                    _panOffset += nextMouseOffset - mouseOffset;
                 }
                 
                 Repaint();
@@ -238,7 +245,7 @@ namespace AssetDependencyGraph.Editor.UI
             Vector2 totalOffset = _panOffset + viewCenter;
             
             // Draw edges first (behind nodes)
-            _edgeRenderer.DrawAllEdges(_rootNode, totalOffset, _zoom, _hoveredNode);
+            _edgeRenderer.DrawAllEdges(_rootNode, totalOffset, _zoom, _filterSettings, _hoveredNode);
             
             // Draw nodes
             DrawNodesRecursive(_rootNode, totalOffset, new System.Collections.Generic.HashSet<string>());
@@ -261,7 +268,7 @@ namespace AssetDependencyGraph.Editor.UI
             if (_nodeRenderer.DrawNode(node, offset, _zoom))
             {
                 // Node expand/collapse was clicked, recalculate layout
-                _layout.CalculateVisibleLayout(_rootNode);
+                _layout.CalculateVisibleLayout(_rootNode, _filterSettings);
                 Repaint();
             }
             
@@ -317,6 +324,7 @@ namespace AssetDependencyGraph.Editor.UI
         private void DrawToolbar()
         {
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
+            GUILayout.Label("v1", EditorStyles.miniLabel, GUILayout.Width(20));
             
             // Reset view button
             if (GUILayout.Button("Reset View", EditorStyles.toolbarButton, GUILayout.Width(80)))
@@ -364,25 +372,33 @@ namespace AssetDependencyGraph.Editor.UI
             EditorGUI.DrawRect(panelRect, new Color(0.25f, 0.25f, 0.25f, 0.95f));
             
             GUILayout.BeginArea(panelRect);
+            if (_rootNode == null)
+            {
+                GUILayout.Label("No asset loaded", EditorStyles.centeredGreyMiniLabel);
+                GUILayout.EndArea();
+                return;
+            }
             _filterScrollPos = GUILayout.BeginScrollView(_filterScrollPos);
             
-            GUILayout.Label("Asset Types", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck(); // Start change check for all filters
             
-            EditorGUI.BeginChangeCheck();
+            if (_availableCategories.Count > 0)
+            {
+                GUILayout.Label("Asset Types", EditorStyles.boldLabel);
+                
+                foreach (var category in _availableCategories)
+                {
+                    bool current = _filterSettings.GetFilter(category);
+                    bool next = GUILayout.Toggle(current, category.ToString());
+                    if (current != next)
+                    {
+                        _filterSettings.SetFilter(category, next);
+                    }
+                }
+                
+                GUILayout.Space(10);
+            }
             
-            _filterSettings.ShowPrefabs = GUILayout.Toggle(_filterSettings.ShowPrefabs, "Prefabs");
-            _filterSettings.ShowScenes = GUILayout.Toggle(_filterSettings.ShowScenes, "Scenes");
-            _filterSettings.ShowScripts = GUILayout.Toggle(_filterSettings.ShowScripts, "Scripts");
-            _filterSettings.ShowMaterials = GUILayout.Toggle(_filterSettings.ShowMaterials, "Materials");
-            _filterSettings.ShowTextures = GUILayout.Toggle(_filterSettings.ShowTextures, "Textures");
-            _filterSettings.ShowShaders = GUILayout.Toggle(_filterSettings.ShowShaders, "Shaders");
-            _filterSettings.ShowAnimations = GUILayout.Toggle(_filterSettings.ShowAnimations, "Animations");
-            _filterSettings.ShowAudio = GUILayout.Toggle(_filterSettings.ShowAudio, "Audio");
-            _filterSettings.ShowModels = GUILayout.Toggle(_filterSettings.ShowModels, "Models");
-            _filterSettings.ShowScriptableObjects = GUILayout.Toggle(_filterSettings.ShowScriptableObjects, "ScriptableObjects");
-            _filterSettings.ShowOther = GUILayout.Toggle(_filterSettings.ShowOther, "Other");
-            
-            GUILayout.Space(10);
             GUILayout.Label("Special", EditorStyles.boldLabel);
             
             _filterSettings.ShowEditorOnly = GUILayout.Toggle(_filterSettings.ShowEditorOnly, "Editor Only");
@@ -406,14 +422,14 @@ namespace AssetDependencyGraph.Editor.UI
             
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("All"))
-                _filterSettings.ShowAll();
+                SetAllFilters(true);
             if (GUILayout.Button("None"))
-                _filterSettings.HideAll();
+                SetAllFilters(false);
             GUILayout.EndHorizontal();
             
             if (EditorGUI.EndChangeCheck() && _rootNode != null)
             {
-                _layout.CalculateVisibleLayout(_rootNode);
+                _layout.CalculateVisibleLayout(_rootNode, _filterSettings);
                 Repaint();
             }
             
@@ -426,8 +442,8 @@ namespace AssetDependencyGraph.Editor.UI
             if (_selectedNode == null)
                 return;
                 
-            float panelWidth = 250f;
-            float panelHeight = 200f;
+            float panelWidth = 320f;
+            float panelHeight = 240f;
             Rect panelRect = new Rect(position.width - panelWidth, position.height - panelHeight, panelWidth, panelHeight);
             
             // Panel background
@@ -442,7 +458,10 @@ namespace AssetDependencyGraph.Editor.UI
             GUILayout.Space(5);
             
             EditorGUILayout.LabelField("Type", _selectedNode.Category.ToString());
-            EditorGUILayout.LabelField("Path", _selectedNode.AssetPath, EditorStyles.wordWrappedMiniLabel);
+            
+            GUILayout.Label("Path", EditorStyles.miniBoldLabel);
+            EditorGUILayout.SelectableLabel(_selectedNode.AssetPath, EditorStyles.wordWrappedMiniLabel, GUILayout.Height(EditorGUIUtility.singleLineHeight * 4));
+            
             EditorGUILayout.LabelField("Size", GraphStyles.FormatFileSize(_selectedNode.FileSizeBytes));
             EditorGUILayout.LabelField("Dependencies", _selectedNode.Dependencies.Count.ToString());
             EditorGUILayout.LabelField("Dependents", _selectedNode.Dependents.Count.ToString());
@@ -499,7 +518,8 @@ namespace AssetDependencyGraph.Editor.UI
             if (_rootNode != null)
             {
                 _rootNode.IsExpanded = true; // Auto-expand root
-                _layout.CalculateVisibleLayout(_rootNode);
+                UpdateAvailableCategories();
+                _layout.CalculateVisibleLayout(_rootNode, _filterSettings);
                 
                 // Reset view
                 _panOffset = Vector2.zero;
@@ -519,7 +539,49 @@ namespace AssetDependencyGraph.Editor.UI
             _selectedNode = null;
             _hoveredNode = null;
             _resolver.ClearCache();
+            _availableCategories.Clear();
             Repaint();
+        }
+        
+        private void UpdateAvailableCategories()
+        {
+            _availableCategories.Clear();
+            if (_rootNode == null)
+                return;
+                
+            var allNodes = _layout.CollectAllNodes(_rootNode);
+            var uniqueCategories = new System.Collections.Generic.HashSet<AssetCategory>();
+            
+            foreach (var node in allNodes)
+            {
+                if (node.Category != AssetCategory.Unknown)
+                    uniqueCategories.Add(node.Category);
+            }
+            
+            _availableCategories.AddRange(uniqueCategories);
+            _availableCategories.Sort((a, b) => a.ToString().CompareTo(b.ToString()));
+            
+            // Re-order to put common types at top
+            MoveToTop(AssetCategory.Scene);
+            MoveToTop(AssetCategory.Prefab);
+        }
+        
+        private void MoveToTop(AssetCategory category)
+        {
+            if (_availableCategories.Remove(category))
+                _availableCategories.Insert(0, category);
+        }
+
+        private void SetAllFilters(bool value)
+        {
+            foreach (var category in _availableCategories)
+            {
+                _filterSettings.SetFilter(category, value);
+            }
+            
+            _filterSettings.ShowEditorOnly = value;
+            _filterSettings.ShowResourcesAssets = value;
+            _filterSettings.ShowMissingReferences = value;
         }
         
         private void FitGraphToView()
@@ -527,7 +589,7 @@ namespace AssetDependencyGraph.Editor.UI
             if (_rootNode == null)
                 return;
                 
-            var allNodes = _layout.GetVisibleNodes(_rootNode);
+            var allNodes = _layout.GetVisibleNodes(_rootNode, _filterSettings);
             if (allNodes.Count == 0)
                 return;
                 
@@ -611,7 +673,7 @@ namespace AssetDependencyGraph.Editor.UI
             // Check if mouse is over info panel
             if (_showInfo && _selectedNode != null)
             {
-                Rect infoRect = new Rect(position.width - 250f, position.height - 200f, 250f, 200f);
+                Rect infoRect = new Rect(position.width - 320f, position.height - 240f, 320f, 240f);
                 if (infoRect.Contains(mousePos))
                     return true;
             }
@@ -647,14 +709,14 @@ namespace AssetDependencyGraph.Editor.UI
                 menu.AddItem(new GUIContent("Expand All"), false, () =>
                 {
                     ExpandNodeRecursive(node, true);
-                    _layout.CalculateVisibleLayout(_rootNode);
+                    _layout.CalculateVisibleLayout(_rootNode, _filterSettings);
                     Repaint();
                 });
                 
                 menu.AddItem(new GUIContent("Collapse All"), false, () =>
                 {
                     ExpandNodeRecursive(node, false);
-                    _layout.CalculateVisibleLayout(_rootNode);
+                    _layout.CalculateVisibleLayout(_rootNode, _filterSettings);
                     Repaint();
                 });
             }
